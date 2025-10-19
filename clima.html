@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Weather Capsule</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root {
+      --accent: #bbff01;
+      --bg-0: #051118;
+      --bg-1: #0d1f2d;
+      --card-bg: rgba(255,255,255,0.08);
+      --card-border: rgba(255,255,255,0.1);
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: 'Montserrat', sans-serif;
+      background: linear-gradient(135deg, var(--bg-0), var(--bg-1));
+      color: #fff;
+    }
+
+    .center {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .weather-card {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      padding: 22px 28px;
+      border-radius: 1.5rem;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+      min-width: 0px;
+      max-width: 420px;
+      transition: all 0.3s ease;
+    }
+
+    .weather-card:hover {
+      transform: scale(1.02);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    }
+
+    .icon {
+      width: 64px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.12);
+      color: var(--accent);
+      font-size: 34px;
+    }
+
+    .info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .temp {
+      font-size: 2.4rem;
+      font-weight: 600;
+      line-height: 1;
+    }
+
+    .city {
+      font-size: 1rem;
+      opacity: 0.86;
+      margin-top: 0.25rem;
+    }
+
+    .date {
+      font-size: 0.9rem;
+      opacity: 0.6;
+      margin-top: 0.25rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="center">
+    <div class="weather-card" id="card">
+      <div class="icon" id="wicon">☀️</div>
+      <div class="info">
+        <div class="temp" id="temp">--°C</div>
+        <div class="city" id="city">Cargando...</div>
+        <div class="date" id="fecha">--</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons && lucide.createIcons();
+
+      const OPENWEATHER_API_KEY = ''; // ← Pegá tu API Key aquí si querés datos reales
+      const elTemp = document.getElementById('temp');
+      const elCity = document.getElementById('city');
+      const elDate = document.getElementById('fecha');
+      const elIcon = document.getElementById('wicon');
+
+      // Formato de fecha: Lun 21 Oct 2025
+      function formatoFecha(d) {
+        const dias = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+        const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+        return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} ${d.getFullYear()}`;
+      }
+      elDate.textContent = formatoFecha(new Date());
+
+      // Detectar ubicación por IP (fallback)
+      async function getLocationByIP() {
+        try {
+          const r = await fetch('https://ipapi.co/json/');
+          if (!r.ok) throw new Error('ipapi failed');
+          return r.json();
+        } catch (e) {
+          return {
+            city: 'Buenos Aires',
+            country_name: 'Argentina',
+            latitude: -34.61,
+            longitude: -58.37
+          };
+        }
+      }
+
+      async function fetchWeather(cityOrCoords) {
+        // Mock si no hay API Key
+        if (!OPENWEATHER_API_KEY) {
+          return { name: cityOrCoords.city || 'Buenos Aires', temp: 20, icon: 'sun' };
+        }
+        try {
+          let url;
+          if (cityOrCoords.lat && cityOrCoords.lon) {
+            url = `https://api.openweathermap.org/data/2.5/weather?lat=${cityOrCoords.lat}&lon=${cityOrCoords.lon}&units=metric&lang=es&appid=${OPENWEATHER_API_KEY}`;
+          } else {
+            url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cityOrCoords.city)}&units=metric&lang=es&appid=${OPENWEATHER_API_KEY}`;
+          }
+          const res = await fetch(url);
+          if (!res.ok) throw new Error('OWM fail');
+          const j = await res.json();
+          return { name: j.name, temp: Math.round(j.main.temp), icon: j.weather[0].main.toLowerCase() };
+        } catch (e) {
+          return { name: cityOrCoords.city || 'Buenos Aires', temp: 20, icon: 'sun' };
+        }
+      }
+
+      // Mapeo de iconos planos (emojis)
+      function iconFromKeyword(k) {
+        if (/cloud/i.test(k)) return '☁️';
+        if (/rain|drizzle/i.test(k)) return '🌧️';
+        if (/snow/i.test(k)) return '❄️';
+        if (/clear|sun/i.test(k)) return '☀️';
+        if (/storm|thunder/i.test(k)) return '⛈️';
+        return '☀️';
+      }
+
+      (async function init() {
+        elCity.textContent = 'Detectando...';
+        const loc = await getLocationByIP();
+        const coords = (loc.latitude && loc.longitude)
+          ? { lat: loc.latitude, lon: loc.longitude }
+          : { city: loc.city || 'Buenos Aires' };
+
+        const w = await fetchWeather(coords);
+        elTemp.textContent = `${w.temp}°C`;
+        elCity.textContent = w.name;
+        elIcon.textContent = iconFromKeyword(w.icon);
+
+        try {
+          if (loc.timezone) {
+            elDate.textContent = formatoFecha(new Date());
+          }
+        } catch (e) { }
+      })();
+    });
+  </script>
+</body>
+</html>
